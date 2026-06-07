@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useGameStore } from "@/lib/store";
 import { PORTALS } from "@/lib/data";
+import { RoomCodeBadge } from "./RoomCodeBadge";
 
 export function GameHUD() {
   const state = useGameStore();
@@ -36,7 +37,7 @@ export function GameHUD() {
             {player.displayName}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Room: <span className="font-mono text-primary/80">RAMS</span>
+            Room: <RoomCodeBadge />
           </p>
         </div>
       </div>
