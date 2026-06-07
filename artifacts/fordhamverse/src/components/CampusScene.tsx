@@ -1,10 +1,11 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, KeyboardControls, useKeyboardControls } from "@react-three/drei";
+import { Html, KeyboardControls, Stars, useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { Building, CampusEvent, LearningPortal, Player } from "@/lib/types";
 import { BUILDINGS, PORTALS, EVENTS } from "@/lib/data";
 import { gameStore } from "@/lib/store";
+import { touchControls } from "@/lib/touchControls";
 
 enum Controls {
   forward = "forward",
@@ -165,7 +166,13 @@ function ControllablePlayer({
   const [, getKeys] = useKeyboardControls<Controls>();
 
   useFrame(({ clock }, delta) => {
-    const { forward, back, left, right, jump, sprint } = getKeys();
+    const k = getKeys();
+    const forward = k.forward || touchControls.forward;
+    const back = k.back || touchControls.back;
+    const left = k.left || touchControls.left;
+    const right = k.right || touchControls.right;
+    const jump = k.jump || touchControls.jump;
+    const sprint = k.sprint || touchControls.sprint;
 
     const dir = new THREE.Vector3();
     if (forward) dir.z -= 1;
@@ -660,10 +667,15 @@ function Tree({ x, z }: { x: number; z: number }) {
 function CampusGround() {
   return (
     <>
+      {/* Far ground base — fills out to the horizon under the fog */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]}>
+        <planeGeometry args={[300, 300]} />
+        <meshStandardMaterial color="#0a2417" roughness={1} />
+      </mesh>
       {/* Grass */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]}>
         <planeGeometry args={[48, 48]} />
-        <meshStandardMaterial color="#071a12" roughness={0.96} />
+        <meshStandardMaterial color="#12361f" roughness={0.96} />
       </mesh>
       {/* South entrance walk — spawn up to Edwards Parade */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[-0.5, 0.004, 12.5]}>
@@ -735,6 +747,41 @@ function CampusGround() {
   );
 }
 
+// ─── Sky ──────────────────────────────────────────────────────────────────────
+function SkyDome() {
+  const texture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 16;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d")!;
+    const grad = ctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, "#01030a"); // zenith
+    grad.addColorStop(0.45, "#040b1c");
+    grad.addColorStop(0.72, "#0a1f37");
+    grad.addColorStop(0.9, "#15314c");
+    grad.addColorStop(1, "#1f4663"); // horizon glow
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 16, 256);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }, []);
+
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  return (
+    <mesh>
+      <sphereGeometry args={[160, 32, 32]} />
+      <meshBasicMaterial
+        map={texture}
+        side={THREE.BackSide}
+        fog={false}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
 // ─── Scene Interior ───────────────────────────────────────────────────────────
 function SceneContent({
   myPlayer,
@@ -755,13 +802,24 @@ function SceneContent({
 }) {
   return (
     <>
+      {/* Sky & atmosphere */}
+      <color attach="background" args={["#040b1c"]} />
+      <fog attach="fog" args={["#0a1f37", 40, 130]} />
+      <SkyDome />
+      <Stars radius={150} depth={60} count={2600} factor={4} saturation={0} fade speed={0.6} />
+      {/* Moon */}
+      <mesh position={[-46, 58, -80]}>
+        <sphereGeometry args={[5, 24, 24]} />
+        <meshBasicMaterial color="#dce8ff" fog={false} />
+      </mesh>
+      <pointLight position={[-46, 58, -80]} color="#9db8e0" intensity={0.5} distance={260} />
+
       {/* Lighting */}
-      <color attach="background" args={["#050a14"]} />
-      <fog attach="fog" args={["#050a14", 22, 65]} />
-      <ambientLight intensity={0.18} color="#1a3a5c" />
+      <hemisphereLight args={["#1a3a5c", "#08160e", 0.4]} />
+      <ambientLight intensity={0.2} color="#1a3a5c" />
       <directionalLight
         position={[12, 22, 12]}
-        intensity={0.9}
+        intensity={0.95}
         color="#dce8ff"
         castShadow
         shadow-mapSize={[2048, 2048]}

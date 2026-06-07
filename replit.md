@@ -29,7 +29,9 @@ A 3D campus game for Fordham Rose Hill where players explore, join live events, 
 - `artifacts/fordhamverse/` — the game (React + Vite + react-three-fiber)
   - `src/lib/store.ts` — multiplayer store: SpacetimeDB connection, room join, remote-player sync, single-player fallback
   - `src/module_bindings/` — generated SpacetimeDB client bindings (import the `spacetimedb` package)
-  - `src/components/CampusScene.tsx` — renders local + remote players; throttled movement sync
+  - `src/components/CampusScene.tsx` — renders local + remote players; throttled movement sync; gradient `SkyDome` + drei `<Stars>` + moon, and the campus ground (incl. far base plane for the horizon)
+  - `src/components/MobileControls.tsx` — touch-only on-screen D-pad + jump/sprint (renders only on coarse-pointer / touch devices, e.g. a phone from the QR code)
+  - `src/lib/touchControls.ts` — shared input singleton the touch buttons mutate; `ControllablePlayer` ORs it with keyboard input each frame
   - `scripts/mp-test.mts` — headless 2-client multiplayer transport test
 - `spacetimedb/` — the SpacetimeDB module (NOT a pnpm workspace package; own npm deps)
   - `src/index.ts` — `player` table + `enterGame` / `updateTransform` / `leaveGame` reducers + disconnect cleanup
