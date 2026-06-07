@@ -90,9 +90,18 @@ function ParticleCanvas() {
   );
 }
 
+function initialRoomCode(): string {
+  if (typeof window === "undefined") return "RAMS";
+  const fromUrl = new URLSearchParams(window.location.search)
+    .get("room")
+    ?.trim()
+    .toUpperCase();
+  return fromUrl || "RAMS";
+}
+
 export default function Landing() {
   const [displayName, setDisplayName] = useState("");
-  const [roomCode, setRoomCode] = useState("RAMS");
+  const [roomCode, setRoomCode] = useState(initialRoomCode);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
