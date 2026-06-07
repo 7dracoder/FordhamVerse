@@ -3,6 +3,7 @@ import { useGameStore, gameStore } from "@/lib/store";
 import { CampusScene } from "@/components/CampusScene";
 import { TopBar } from "@/components/TopBar";
 import { GameHUD } from "@/components/GameHUD";
+import { MobileControls } from "@/components/MobileControls";
 import { QuestSidebar } from "@/components/QuestSidebar";
 import { EventSidebar } from "@/components/EventSidebar";
 import { AIAssistant } from "@/components/AIAssistant";
@@ -89,6 +90,7 @@ export default function Game() {
         mapOpen={showMap}
       />
       <GameHUD />
+      <MobileControls />
 
       {/* Real Rose Hill campus map overlay */}
       <CampusMap open={showMap} onClose={() => setShowMap(false)} />
