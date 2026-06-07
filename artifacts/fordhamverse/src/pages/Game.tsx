@@ -6,9 +6,11 @@ import { GameHUD } from "@/components/GameHUD";
 import { QuestSidebar } from "@/components/QuestSidebar";
 import { EventSidebar } from "@/components/EventSidebar";
 import { AIAssistant } from "@/components/AIAssistant";
+import { CampusMap } from "@/components/CampusMap";
 
 export default function Game() {
   const state = useGameStore();
+  const [showMap, setShowMap] = useState(false);
   const [nearPortalId, setNearPortalId] = useState<string | null>(null);
   const [nearEventId, setNearEventId] = useState<string | null>(null);
   const [selectedPortalId, setSelectedPortalId] = useState<string | null>(null);
@@ -81,8 +83,15 @@ export default function Game() {
       </div>
 
       {/* UI overlays */}
-      <TopBar onLeave={handleLeave} />
+      <TopBar
+        onLeave={handleLeave}
+        onToggleMap={() => setShowMap((v) => !v)}
+        mapOpen={showMap}
+      />
       <GameHUD />
+
+      {/* Real Rose Hill campus map overlay */}
+      <CampusMap open={showMap} onClose={() => setShowMap(false)} />
 
       {/* Quest sidebar — right side, slides in */}
       <QuestSidebar

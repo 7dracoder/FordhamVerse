@@ -22,6 +22,8 @@ export interface Building {
   size: [number, number, number];
   campus: Campus;
   color: string;
+  /** Optional architectural landmark feature rendered on top of the building. */
+  landmark?: "tower" | "spire";
 }
 
 export interface LearningPortal {
@@ -29,6 +31,9 @@ export interface LearningPortal {
   buildingId: string;
   title: string;
   description: string;
+  /** Explicit world position for the portal. Falls back to a computed offset
+   * from the building when omitted. Authored to sit in open ground. */
+  position?: { x: number; z: number };
   category: PortalCategory;
   replitTemplateUrl: string;
   estimatedMinutes: number;
