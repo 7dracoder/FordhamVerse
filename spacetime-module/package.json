@@ -1,0 +1,20 @@
+{
+  "name": "@fordhamverse/spacetime-module",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "spacetime build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src/index.test.ts",
+    "publish:local": "spacetime publish --server local fordhamverse-live",
+    "generate:client": "spacetime generate --module-path . --lang typescript --out-dir ../frontend/src/module_bindings"
+  },
+  "dependencies": {
+    "spacetimedb": "^2.4.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.8"
+  }
+}

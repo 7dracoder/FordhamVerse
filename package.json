@@ -1,0 +1,23 @@
+{
+  "name": "fordhamverse-live",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A real-time 3D Fordham campus MMO with live events, Replit quests, and an AI Campus TA.",
+  "workspaces": [
+    "frontend",
+    "spacetime-module"
+  ],
+  "scripts": {
+    "postinstall": "npm install --prefix spacetime-module --include=dev --workspaces=false",
+    "dev": "concurrently -k -n frontend,agent -c green,cyan \"npm run dev -w frontend\" \"npm run dev:agent\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:agent": "cd agent-service && .venv/bin/python -m uvicorn app.main:app --reload --port 8000",
+    "build": "npm run build -w spacetime-module && npm run build -w frontend",
+    "typecheck": "npm run typecheck -w spacetime-module && npm run typecheck -w frontend",
+    "test": "npm run test -w spacetime-module && npm run test:agent",
+    "test:agent": "cd agent-service && .venv/bin/python -m pytest -q"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
