@@ -2,6 +2,8 @@
 
 Production-ready demo monorepo for the FordhamVerse Live specification.
 
+Full feature reference: [FEATURES.md](FEATURES.md)
+
 ## What is included
 
 - `frontend`: Vite, React, TypeScript, Tailwind, React Three Fiber, Drei, and Framer Motion.
