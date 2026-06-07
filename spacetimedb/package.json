@@ -1,0 +1,17 @@
+{
+  "name": "fordhamverse-stdb-module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SpacetimeDB server module for FordhamVerse Live multiplayer presence",
+  "scripts": {
+    "build": "spacetime build",
+    "publish:local": "spacetime publish -p . -s local fordhamverse",
+    "publish:maincloud": "spacetime publish -p . -s maincloud fordhamverse"
+  },
+  "dependencies": {
+    "spacetimedb": "^2.4.1"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2"
+  }
+}
