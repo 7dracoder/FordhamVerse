@@ -58,7 +58,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 - The local SpacetimeDB data dir is `/home/runner/workspace/.local/share/spacetime/data` — it does **not** follow the workflow's `$HOME`. `dev-server.sh` wipes that explicit path.
 - After changing the SpacetimeDB module (`spacetimedb/src/index.ts`), restart the `SpacetimeDB Server` workflow to republish, and regenerate client bindings if the schema changed.
-- Production multiplayer requires publishing the module to SpacetimeDB Maincloud (needs the owner's `spacetime login` token); until then a deployed build falls back to single-player.
+- Production multiplayer is live on Maincloud (`fordhamverse` database, dashboard: https://spacetimedb.com/fordhamverse). The deployed build connects automatically — no extra env vars needed. To re-publish after module changes: `spacetime login` then `cd spacetimedb && spacetime publish -s maincloud --yes fordhamverse`.
 
 ## Pointers
 

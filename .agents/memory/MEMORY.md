@@ -1,2 +1,3 @@
 - [WebGL e2e limitation](webgl-e2e-testing.md) — the Playwright testing subagent has no GPU; React Three Fiber / 3D scenes fail with "Error creating WebGL context". Verify 3D via typecheck + console logs, not runTest.
 - [SpacetimeDB multiplayer](spacetimedb-multiplayer.md) — SDK WS URL needs trailing-slash base; local data dir ignores $HOME; anonymous publish 403 → wipe-on-start.
+- [SpacetimeDB Maincloud publish](stdb-maincloud-publish.md) — module published as `fordhamverse`; token gotcha and re-publish steps.
