@@ -3,9 +3,11 @@ import { useGameStore, gameStore } from "@/lib/store";
 
 interface TopBarProps {
   onLeave: () => void;
+  onToggleMap: () => void;
+  mapOpen: boolean;
 }
 
-export function TopBar({ onLeave }: TopBarProps) {
+export function TopBar({ onLeave, onToggleMap, mapOpen }: TopBarProps) {
   const state = useGameStore();
 
   return (
@@ -34,6 +36,20 @@ export function TopBar({ onLeave }: TopBarProps) {
 
       {/* Right controls */}
       <div className="pointer-events-auto flex items-center gap-2">
+        <button
+          data-testid="button-toggle-map"
+          onClick={onToggleMap}
+          className={`glass-panel rounded-xl px-3 py-2 text-xs font-semibold transition-all flex items-center gap-1.5 ${
+            mapOpen ? "text-primary border-primary/40" : "text-muted-foreground"
+          }`}
+          title="View Rose Hill campus map"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+          </svg>
+          Map
+        </button>
+
         <button
           data-testid="button-toggle-heatmap"
           onClick={() => gameStore.toggleHeatmap()}

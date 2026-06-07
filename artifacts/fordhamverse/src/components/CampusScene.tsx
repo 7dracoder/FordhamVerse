@@ -25,9 +25,9 @@ const KEY_MAP = [
 ];
 
 const TREE_POSITIONS: [number, number][] = [
-  [-12, -9], [-9, -9], [-6, -9], [6, -10], [10, -9], [12, -5],
-  [-12, 7], [-9, 10], [-4, 11], [7, 10], [11, 8],
-  [-3, -12], [3, -12], [-11, 2], [11, 2],
+  [13, -1], [14, 5], [9, 5], [13, 9], [16, 8],
+  [-8, -2], [-8, 5], [-13, 5], [-13, 9], [-13, -12],
+  [8, -7], [-2, -8], [6, -6], [-9, -5], [9, 13],
 ];
 
 // ─── Avatar Body ─────────────────────────────────────────────────────────────
@@ -229,8 +229,12 @@ function ControllablePlayer({
     for (const portal of PORTALS) {
       const building = BUILDINGS.find((b) => b.id === portal.buildingId);
       if (!building) continue;
-      const px = building.position.x - building.size[0] / 2 - 1;
-      const pz = building.position.z + building.size[2] / 2 - 0.5;
+      const px = portal.position
+        ? portal.position.x
+        : building.position.x - building.size[0] / 2 - 1;
+      const pz = portal.position
+        ? portal.position.z
+        : building.position.z + building.size[2] / 2 - 0.5;
       const d = posRef.current.distanceTo(new THREE.Vector3(px, 0, pz));
       if (d < nearPortalDist) {
         nearPortal = portal.id;
@@ -342,15 +346,82 @@ function BuildingBlock({
         <meshStandardMaterial color="#0d1120" roughness={0.85} />
       </mesh>
 
-      {/* Rooftop accent */}
-      <mesh position={[0, h + 0.35, 0]}>
-        <boxGeometry args={[w * 0.3, 0.1, d * 0.3]} />
-        <meshStandardMaterial
-          color="#22c55e"
-          emissive="#22c55e"
-          emissiveIntensity={1.2}
-        />
-      </mesh>
+      {/* Rooftop accent (skipped on landmark buildings) */}
+      {!building.landmark && (
+        <mesh position={[0, h + 0.35, 0]}>
+          <boxGeometry args={[w * 0.3, 0.1, d * 0.3]} />
+          <meshStandardMaterial
+            color="#22c55e"
+            emissive="#22c55e"
+            emissiveIntensity={1.2}
+          />
+        </mesh>
+      )}
+
+      {/* Keating Hall clock tower */}
+      {building.landmark === "tower" && (
+        <group position={[0, h, 0]}>
+          <mesh castShadow position={[0, 1.6, 0]}>
+            <boxGeometry args={[Math.min(w * 0.5, 2), 3.2, Math.min(d * 0.5, 2)]} />
+            <meshStandardMaterial
+              color={building.color}
+              roughness={0.7}
+              metalness={0.15}
+            />
+          </mesh>
+          {/* Clock face */}
+          <mesh position={[0, 2.4, Math.min(d * 0.5, 2) / 2 + 0.02]}>
+            <circleGeometry args={[0.42, 24]} />
+            <meshStandardMaterial
+              color="#fde68a"
+              emissive="#fbbf24"
+              emissiveIntensity={0.9}
+            />
+          </mesh>
+          {/* Spire cap */}
+          <mesh castShadow position={[0, 3.55, 0]}>
+            <coneGeometry args={[Math.min(w * 0.4, 1.5), 1.2, 4]} />
+            <meshStandardMaterial color="#161d30" roughness={0.8} />
+          </mesh>
+          <pointLight
+            color="#fbbf24"
+            intensity={0.8}
+            distance={8}
+            position={[0, 2.4, 1.6]}
+          />
+        </group>
+      )}
+
+      {/* University Church spire */}
+      {building.landmark === "spire" && (
+        <group position={[0, h, 0]}>
+          <mesh castShadow position={[0, 1.9, 0]}>
+            <coneGeometry args={[Math.min(w, d) * 0.45, 3.8, 8]} />
+            <meshStandardMaterial
+              color={building.color}
+              roughness={0.75}
+              metalness={0.2}
+            />
+          </mesh>
+          {/* Finial cross */}
+          <mesh position={[0, 4.05, 0]}>
+            <boxGeometry args={[0.12, 0.75, 0.12]} />
+            <meshStandardMaterial
+              color="#fde68a"
+              emissive="#fbbf24"
+              emissiveIntensity={1}
+            />
+          </mesh>
+          <mesh position={[0, 3.92, 0]}>
+            <boxGeometry args={[0.42, 0.12, 0.12]} />
+            <meshStandardMaterial
+              color="#fde68a"
+              emissive="#fbbf24"
+              emissiveIntensity={1}
+            />
+          </mesh>
+        </group>
+      )}
 
       {/* Windows */}
       {windowPositions.map((wp, i) => (
@@ -411,8 +482,16 @@ function PortalMarker({
 }) {
   const group = useRef<THREE.Group>(null);
   const building = BUILDINGS.find((b) => b.id === portal.buildingId);
-  const px = building ? building.position.x - building.size[0] / 2 - 1 : 0;
-  const pz = building ? building.position.z + building.size[2] / 2 - 0.5 : 0;
+  const px = portal.position
+    ? portal.position.x
+    : building
+      ? building.position.x - building.size[0] / 2 - 1
+      : 0;
+  const pz = portal.position
+    ? portal.position.z
+    : building
+      ? building.position.z + building.size[2] / 2 - 0.5
+      : 0;
 
   useFrame(({ clock }) => {
     if (!group.current) return;
@@ -583,36 +662,75 @@ function CampusGround() {
     <>
       {/* Grass */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]}>
-        <planeGeometry args={[40, 40]} />
+        <planeGeometry args={[48, 48]} />
         <meshStandardMaterial color="#071a12" roughness={0.96} />
       </mesh>
-      {/* Main path N-S */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
-        <planeGeometry args={[3.5, 38]} />
+      {/* South entrance walk — spawn up to Edwards Parade */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[-0.5, 0.004, 12.5]}>
+        <planeGeometry args={[2.6, 12]} />
         <meshStandardMaterial color="#1e2533" roughness={0.95} />
       </mesh>
-      {/* Main path E-W */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
-        <planeGeometry args={[38, 3.5]} />
+      {/* West connector toward Dealy Hall */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[-7.5, 0.004, 0]}>
+        <planeGeometry args={[3.5, 1.6]} />
         <meshStandardMaterial color="#1e2533" roughness={0.95} />
       </mesh>
-      {/* Central fountain base */}
-      <mesh receiveShadow position={[0, 0.18, 1]}>
-        <cylinderGeometry args={[1.4, 1.55, 0.35, 32]} />
-        <meshStandardMaterial color="#2a3244" roughness={0.75} />
+      {/* East connector toward Keating Hall */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[5.75, 0.004, -1]}>
+        <planeGeometry args={[2.5, 1.6]} />
+        <meshStandardMaterial color="#1e2533" roughness={0.95} />
       </mesh>
-      {/* Fountain water */}
-      <mesh position={[0, 0.42, 1]}>
-        <cylinderGeometry args={[0.9, 1, 0.18, 32]} />
+      {/* North connector toward Hughes Hall */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[1, 0.004, -7]}>
+        <planeGeometry args={[1.6, 4]} />
+        <meshStandardMaterial color="#1e2533" roughness={0.95} />
+      </mesh>
+
+      {/* Edwards Parade — central lawn border */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[1.5, 0.008, 1]}>
+        <planeGeometry args={[15.4, 13.4]} />
+        <meshStandardMaterial color="#0c2a1c" roughness={0.95} />
+      </mesh>
+      {/* Edwards Parade — manicured lawn */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[1.5, 0.012, 1]}>
+        <planeGeometry args={[14.6, 12.6]} />
         <meshStandardMaterial
-          color="#38bdf8"
-          emissive="#0ea5e9"
-          emissiveIntensity={0.5}
-          roughness={0.28}
-          metalness={0.1}
+          color="#0f3d28"
+          emissive="#0a3d22"
+          emissiveIntensity={0.12}
+          roughness={0.92}
         />
       </mesh>
-      <pointLight color="#38bdf8" intensity={1.5} distance={6} position={[0, 1, 1]} />
+      {/* Diagonal parade walkways forming an X */}
+      <group position={[1.5, 0.016, 1]} rotation={[0, Math.PI / 4, 0]}>
+        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[1.3, 18]} />
+          <meshStandardMaterial color="#243049" roughness={0.95} />
+        </mesh>
+      </group>
+      <group position={[1.5, 0.016, 1]} rotation={[0, -Math.PI / 4, 0]}>
+        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[1.3, 18]} />
+          <meshStandardMaterial color="#243049" roughness={0.95} />
+        </mesh>
+      </group>
+
+      {/* Flagpole at the heart of Edwards Parade */}
+      <mesh castShadow position={[1.5, 1.6, 1]}>
+        <cylinderGeometry args={[0.07, 0.09, 3.2, 12]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.6} roughness={0.35} />
+      </mesh>
+      <mesh position={[1.97, 2.85, 1]}>
+        <planeGeometry args={[0.9, 0.55]} />
+        <meshStandardMaterial
+          color="#7f1d1d"
+          emissive="#991b1b"
+          emissiveIntensity={0.45}
+          side={THREE.DoubleSide}
+          roughness={0.5}
+        />
+      </mesh>
+      <pointLight color="#ffd9a0" intensity={1.3} distance={10} position={[1.5, 2.6, 1]} />
     </>
   );
 }
@@ -720,7 +838,10 @@ export function CampusScene({
         camera={{ position: [0, 8, 16], fov: 60 }}
         shadows
         style={{ width: "100%", height: "100%" }}
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, shadowMapType: THREE.PCFShadowMap }}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
+        onCreated={({ gl }) => {
+          gl.shadowMap.type = THREE.PCFShadowMap;
+        }}
       >
         <SceneContent
           myPlayer={myPlayer}

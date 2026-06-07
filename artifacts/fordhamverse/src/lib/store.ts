@@ -75,7 +75,7 @@ class GameStore {
       roomId: "room-demo",
       displayName: displayName.slice(0, 32),
       avatarColor: color,
-      position: { x: 0, y: 0, z: 11 },
+      position: { x: 0, y: 0, z: 14 },
       rotationY: Math.PI,
       activeQuestId: null,
       connected: true,

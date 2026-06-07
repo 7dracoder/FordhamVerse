@@ -1,0 +1,1 @@
+- [WebGL e2e limitation](webgl-e2e-testing.md) — the Playwright testing subagent has no GPU; React Three Fiber / 3D scenes fail with "Error creating WebGL context". Verify 3D via typecheck + console logs, not runTest.
