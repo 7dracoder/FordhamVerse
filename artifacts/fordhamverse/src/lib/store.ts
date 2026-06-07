@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Player, PlayerQuest, EventRsvp, Vec3 } from "./types";
 import { AVATAR_COLORS } from "./data";
+import { DbConnection } from "@/module_bindings";
 
 interface GameState {
   players: Record<string, Player>;
@@ -8,6 +9,62 @@ interface GameState {
   rsvps: Record<string, EventRsvp>;
   myPlayerId: string | null;
   heatmapMode: boolean;
+}
+
+/** Minimal structural shape of a SpacetimeDB `player` row. */
+interface PlayerRow {
+  identity: { toHexString(): string };
+  room: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  z: number;
+  rot: number;
+  online: boolean;
+}
+
+const SPAWN: Vec3 = { x: 0, y: 0, z: 14 };
+const SPAWN_ROT = Math.PI;
+
+const MODULE_NAME = import.meta.env.VITE_STDB_MODULE || "fordhamverse";
+
+/**
+ * Where the browser connects to SpacetimeDB.
+ * - Explicit override via `VITE_STDB_URI` always wins.
+ * - In dev, connect through the api-server `/stdb` reverse proxy to the local
+ *   standalone server.
+ * - In production, connect to SpacetimeDB Maincloud directly.
+ * The SDK upgrades http(s) → ws(s) automatically.
+ */
+function resolveStdbUri(): string {
+  const uri = resolveStdbUriRaw();
+  // The SDK builds the websocket URL via `new URL("v1/database/.../subscribe", uri)`.
+  // Without a trailing slash, `new URL` strips the last path segment (e.g. `/stdb`),
+  // which breaks the reverse-proxy route. Always normalize to a trailing slash.
+  return uri.endsWith("/") ? uri : `${uri}/`;
+}
+
+function resolveStdbUriRaw(): string {
+  const override = import.meta.env.VITE_STDB_URI;
+  if (override) return override;
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    return `${window.location.origin}/stdb`;
+  }
+  return "https://maincloud.spacetimedb.com";
+}
+
+function rowToPlayer(row: PlayerRow): Player {
+  return {
+    id: row.identity.toHexString(),
+    roomId: row.room,
+    displayName: row.name,
+    avatarColor: row.color,
+    position: { x: row.x, y: row.y, z: row.z },
+    rotationY: row.rot,
+    activeQuestId: null,
+    connected: row.online,
+  };
 }
 
 function makeId(prefix: string): string {
@@ -26,6 +83,14 @@ class GameStore {
   private state: GameState = { ...DEFAULT_STATE };
   private listeners: Set<() => void> = new Set();
   private colorIndex = 0;
+
+  // Multiplayer connection state
+  private conn: DbConnection | null = null;
+  private connected = false;
+  private myId: string | null = null;
+  private lastTxSent = 0;
+  private pendingTx: { x: number; y: number; z: number; rot: number } | null = null;
+  private txTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     try {
@@ -46,7 +111,13 @@ class GameStore {
     }
   }
 
-  private emit() {
+  /** Notify React subscribers without touching localStorage. */
+  private notify() {
+    for (const listener of this.listeners) listener();
+  }
+
+  /** Persist durable state (quests/rsvps/heatmap) and notify subscribers. */
+  private persist() {
     localStorage.setItem(
       "fordhamverse-live-v2",
       JSON.stringify({
@@ -55,7 +126,7 @@ class GameStore {
         heatmapMode: this.state.heatmapMode,
       })
     );
-    for (const listener of this.listeners) listener();
+    this.notify();
   }
 
   subscribe = (listener: () => void) => {
@@ -65,46 +136,198 @@ class GameStore {
 
   getSnapshot = (): GameState => this.state;
 
-  joinRoom(displayName: string, _roomCode: string) {
-    const id = makeId("player");
+  joinRoom(displayName: string, roomCode: string) {
+    const name = displayName.slice(0, 32);
+    const room = (roomCode || "RAMS").trim().toUpperCase();
     const color = AVATAR_COLORS[this.colorIndex % AVATAR_COLORS.length];
     this.colorIndex++;
+    this.connect(name, room, color);
+  }
 
+  /** Attempt a real multiplayer connection, falling back to a local session. */
+  private connect(name: string, room: string, color: string) {
+    let settled = false;
+
+    const startLocal = () => {
+      if (settled) return;
+      settled = true;
+      this.startLocalSession(name, room, color);
+    };
+
+    const timeout = setTimeout(() => {
+      // Connection took too long — drop it and run locally.
+      try {
+        this.conn?.disconnect();
+      } catch {
+        // ignore
+      }
+      this.conn = null;
+      startLocal();
+    }, 6000);
+
+    try {
+      this.conn = DbConnection.builder()
+        .withUri(resolveStdbUri())
+        .withDatabaseName(MODULE_NAME)
+        .onConnect((conn, identity) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+
+          this.connected = true;
+          this.myId = identity.toHexString();
+
+          // Keep remote players in sync via row callbacks.
+          conn.db.player.onInsert((_ctx, row) => this.upsertRemote(row));
+          conn.db.player.onUpdate((_ctx, _old, row) => this.upsertRemote(row));
+          conn.db.player.onDelete((_ctx, row) => this.removeRemote(row));
+
+          const escapedRoom = room.replace(/'/g, "''");
+          conn
+            .subscriptionBuilder()
+            .onError((ctx) =>
+              console.warn("SpacetimeDB subscription error", ctx.event)
+            )
+            .subscribe(`SELECT * FROM player WHERE room = '${escapedRoom}'`);
+
+          // Register our own presence on the server.
+          conn.reducers.enterGame({ room, name, color });
+
+          // Add our locally-authoritative player immediately.
+          const self: Player = {
+            id: this.myId,
+            roomId: room,
+            displayName: name,
+            avatarColor: color,
+            position: { ...SPAWN },
+            rotationY: SPAWN_ROT,
+            activeQuestId: null,
+            connected: true,
+          };
+          this.state = {
+            ...this.state,
+            myPlayerId: this.myId,
+            players: { ...this.state.players, [this.myId]: self },
+          };
+          this.notify();
+        })
+        .onConnectError((_ctx, err) => {
+          clearTimeout(timeout);
+          console.warn("SpacetimeDB connect error — running locally", err);
+          this.conn = null;
+          startLocal();
+        })
+        .onDisconnect(() => {
+          this.connected = false;
+        })
+        .build();
+    } catch (err) {
+      clearTimeout(timeout);
+      console.warn("SpacetimeDB unavailable — running locally", err);
+      this.conn = null;
+      startLocal();
+    }
+  }
+
+  /** Single-player fallback when SpacetimeDB cannot be reached. */
+  private startLocalSession(name: string, room: string, color: string) {
+    const id = makeId("player");
     const newPlayer: Player = {
       id,
-      roomId: "room-demo",
-      displayName: displayName.slice(0, 32),
+      roomId: room,
+      displayName: name,
       avatarColor: color,
-      position: { x: 0, y: 0, z: 14 },
-      rotationY: Math.PI,
+      position: { ...SPAWN },
+      rotationY: SPAWN_ROT,
       activeQuestId: null,
       connected: true,
     };
-
     this.state = {
       ...this.state,
       myPlayerId: id,
       players: { ...this.state.players, [id]: newPlayer },
     };
-    this.emit();
+    this.notify();
+  }
+
+  /** Upsert a remote player from a server row (ignores our own row). */
+  private upsertRemote(row: PlayerRow) {
+    const id = row.identity.toHexString();
+    if (id === this.myId) return; // self is locally authoritative
+    this.state = {
+      ...this.state,
+      players: { ...this.state.players, [id]: rowToPlayer(row) },
+    };
+    this.notify();
+  }
+
+  /** Remove a remote player whose row was deleted. */
+  private removeRemote(row: PlayerRow) {
+    const id = row.identity.toHexString();
+    if (id === this.myId) return;
+    if (!this.state.players[id]) return;
+    const players = { ...this.state.players };
+    delete players[id];
+    this.state = { ...this.state, players };
+    this.notify();
   }
 
   leaveRoom() {
-    if (!this.state.myPlayerId) return;
-    const players = { ...this.state.players };
-    delete players[this.state.myPlayerId];
-    this.state = { ...this.state, myPlayerId: null, players };
-    this.emit();
+    if (this.conn) {
+      try {
+        if (this.connected) this.conn.reducers.leaveGame({});
+        this.conn.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+    if (this.txTimer) {
+      clearTimeout(this.txTimer);
+      this.txTimer = null;
+    }
+    this.conn = null;
+    this.connected = false;
+    this.myId = null;
+    this.pendingTx = null;
+    this.state = { ...this.state, myPlayerId: null, players: {} };
+    this.notify();
   }
 
-  // Called from game loop — updates position in memory ONLY (no React re-render, no localStorage)
+  // Called from game loop — updates position in memory ONLY (no React re-render,
+  // no localStorage) and forwards a throttled transform to the server.
   updateMyPositionSilent(position: Vec3, rotationY: number) {
     const pid = this.state.myPlayerId;
     if (!pid || !this.state.players[pid]) return;
-    // Mutate in-place so getSnapshot reference stays the same → useSyncExternalStore won't re-render
+    // Mutate in-place so getSnapshot reference stays the same → no re-render
     const p = this.state.players[pid];
     p.position = { ...position };
     p.rotationY = rotationY;
+
+    // Forward to the server (throttled). CampusScene already throttles to ~10/s.
+    if (!this.conn || !this.connected) return;
+    this.pendingTx = { x: position.x, y: position.y, z: position.z, rot: rotationY };
+    const now = Date.now();
+    const elapsed = now - this.lastTxSent;
+    if (elapsed >= 100) {
+      this.flushTransform();
+    } else if (!this.txTimer) {
+      this.txTimer = setTimeout(() => {
+        this.txTimer = null;
+        this.flushTransform();
+      }, 100 - elapsed);
+    }
+  }
+
+  private flushTransform() {
+    const tx = this.pendingTx;
+    if (!tx || !this.conn || !this.connected) return;
+    this.pendingTx = null;
+    this.lastTxSent = Date.now();
+    try {
+      this.conn.reducers.updateTransform(tx);
+    } catch {
+      // ignore transient send errors
+    }
   }
 
   startQuest(portalId: string) {
@@ -127,7 +350,7 @@ class GameStore {
       players: { ...this.state.players, [pid]: updatedPlayer },
       quests: { ...this.state.quests, [questId]: newQuest },
     };
-    this.emit();
+    this.persist();
   }
 
   completeQuest() {
@@ -148,7 +371,7 @@ class GameStore {
       players: { ...this.state.players, [pid]: updatedPlayer },
       quests: { ...this.state.quests, [qid]: updatedQuest },
     };
-    this.emit();
+    this.persist();
   }
 
   rsvpEvent(eventId: string, status: "going" | "interested") {
@@ -160,7 +383,7 @@ class GameStore {
       ...this.state,
       rsvps: { ...this.state.rsvps, [rsvpId]: rsvp },
     };
-    this.emit();
+    this.persist();
   }
 
   getRsvpStatus(eventId: string): "going" | "interested" | null {
@@ -180,7 +403,7 @@ class GameStore {
 
   toggleHeatmap() {
     this.state = { ...this.state, heatmapMode: !this.state.heatmapMode };
-    this.emit();
+    this.persist();
   }
 }
 
